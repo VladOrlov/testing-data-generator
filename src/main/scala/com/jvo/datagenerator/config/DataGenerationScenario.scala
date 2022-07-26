@@ -1,0 +1,10 @@
+package com.jvo.datagenerator.config
+
+sealed trait DataGenerationScenario
+
+case object Basic extends DataGenerationScenario
+case object DependencyDataDelay extends DataGenerationScenario
+case object DataDelay extends DataGenerationScenario
+case object EmptyStringValues extends DataGenerationScenario
+case object NullValues extends DataGenerationScenario
+case object WrongFormatValues extends DataGenerationScenario

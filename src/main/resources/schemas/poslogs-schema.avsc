@@ -1,0 +1,39 @@
+{
+  "namespace": "data-generator.gold",
+  "type": "record",
+  "name": "poslogs",
+  "fields": [
+    {
+      "name": "id",
+      "type": "int"
+    },
+    {
+      "name": "storeId",
+      "type": "int"
+    },
+    {
+      "name": "memberId",
+      "type": "int"
+    },
+    {
+      "name": "productId",
+      "type": "long"
+    },
+    {
+      "name": "quantity",
+      "type": "double"
+    },
+    {
+      "name": "price",
+      "type": "double"
+    },
+    {
+      "name": "discount",
+      "type": "double"
+    },
+    {
+      "name": "sum",
+      "type": "double"
+    }
+  ]
+}

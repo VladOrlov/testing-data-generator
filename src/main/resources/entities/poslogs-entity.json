@@ -1,0 +1,25 @@
+{
+  "name": "Poslogs",
+  "role": "PURCHASE",
+  "schemaName": "data-generator.gold.poslogs",
+  "dependentFields": {
+    "storeId": {
+      "dependencyEntity": "Store",
+      "dependencyField": "id"
+    },
+    "memberId": {
+      "dependencyEntity": "Member",
+      "dependencyField": "id"
+    },
+    "productId": {
+      "dependencyEntity": "Product",
+      "dependencyField": "id"
+    }
+  },
+  "specificDataFields": {
+    "quantity": "PURCHASE_QUANTITY",
+    "price": "PURCHASE_PRICE",
+    "discount": "PURCHASE_DISCOUNT",
+    "sum": "PURCHASE_SUM"
+  }
+}

@@ -1,0 +1,7 @@
+default: &default
+  host: "localhost"
+  port: "8090"
+  apiVersion: "v1"
+  entityOperationsUrls:
+    crudOperations: "/entities"
+    fetchWithFilter: "/entities/filter"

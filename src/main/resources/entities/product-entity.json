@@ -1,0 +1,8 @@
+{
+  "name": "Product",
+  "role": "PRODUCT",
+  "schemaName": "data-generator.gold.product",
+  "specificDataFields": {
+    "name": "PRODUCT_NAME"
+  }
+}

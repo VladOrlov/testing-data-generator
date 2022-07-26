@@ -1,0 +1,11 @@
+{
+  "name": "Network",
+  "role": "COMPANY",
+  "schemaName": "data-generator.gold.network",
+  "specificDataFields": {
+    "name": "COMPANY_NAME",
+    "email": "COMPANY_EMAIL",
+    "website": "COMPANY_WEBSITE",
+    "phone": "COMPANY_PHONE"
+  }
+}

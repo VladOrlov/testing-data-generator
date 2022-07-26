@@ -1,0 +1,12 @@
+{
+  "name": "Member",
+  "role": "PERSON",
+  "schemaName": "data-generator.gold.member",
+  "specificDataFields": {
+    "firstName": "PERSON_FIRST_NAME",
+    "lastName": "PERSON_LAST_NAME",
+    "email": "PERSON_EMAIL",
+    "phone": "PERSON_PHONE",
+    "address": "PERSON_ADDRESS"
+  }
+}

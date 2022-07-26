@@ -1,0 +1,17 @@
+{
+  "name": "Store",
+  "role": "COMPANY",
+  "schemaName": "data-generator.gold.store",
+  "dependentFields": {
+    "networkId": {
+      "dependencyEntity": "Network",
+      "dependencyField": "id"
+    }
+  },
+  "specificDataFields": {
+    "name": "COMPANY_NAME",
+    "website": "COMPANY_WEBSITE",
+    "phone": "COMPANY_PHONE",
+    "email": "COMPANY_EMAIL"
+  }
+}

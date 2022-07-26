@@ -1,0 +1,35 @@
+{
+  "namespace": "data-generator.gold",
+  "type": "record",
+  "name": "store",
+  "fields": [
+    {
+      "name": "id",
+      "type": "int"
+    },
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "networkId",
+      "type": "int"
+    },
+    {
+      "name": "address",
+      "type": "string"
+    },
+    {
+      "name": "website",
+      "type": "string"
+    },
+    {
+      "name": "email",
+      "type": "string"
+    },
+    {
+      "name": "phone",
+      "type": "string"
+    }
+  ]
+}

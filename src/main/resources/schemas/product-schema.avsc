@@ -1,0 +1,19 @@
+{
+  "namespace": "data-generator.gold",
+  "type": "record",
+  "name": "product",
+  "fields": [
+    {
+      "name": "id",
+      "type": "long"
+    },
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "description",
+      "type": "string"
+    }
+  ]
+}
