@@ -3,7 +3,7 @@ package com.jvo.datagenerator.api
 import com.jvo.datagenerator.config.DataGenerationScenario
 import com.jvo.datagenerator.dto.RecordsImportProperties
 import com.jvo.datagenerator.dto.sink.PersistenceEntity
-import com.jvo.datagenerator.services.PersistenceClient
+import com.jvo.datagenerator.services.{EntityDataService, PersistenceClient}
 import com.jvo.datagenerator.services.keepers.DataKeeper
 import com.jvo.datagenerator.utils.{AvroUtils, JsonObjectMapper}
 import org.apache.avro.generic.GenericData
@@ -53,22 +53,9 @@ trait EntityDataController {
 
     val delayedData = delayedDataMap
       .map {
-        case (entity, recordsImportProperties) => (entity, getDelayedRecords(recordsImportProperties))
+        case (entity, recordsImportProperties) => (entity, EntityDataService.getDelayedRecords(recordsImportProperties))
       }.toSeq
 
     delayedData
-  }
-
-  private def getDelayedRecords(recordsImportProperties: RecordsImportProperties) = {
-    recordsImportProperties.recordsToDelay
-      .map(scenarioRecords => getRecordsAsMap(scenarioRecords))
-      .getOrElse(Nil)
-  }
-
-  private def getRecordsAsMap(scenarioRecords: Map[DataGenerationScenario, Seq[GenericData.Record]]) = {
-    scenarioRecords.values
-      .flatMap {
-        records => records.flatMap(record => AvroUtils.convertRecordToMap(record))
-      }.toList
   }
 }
