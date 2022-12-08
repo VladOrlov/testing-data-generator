@@ -4,7 +4,8 @@ import com.devskiller.jfairy.Fairy
 import com.devskiller.jfairy.producer.company.Company
 import com.devskiller.jfairy.producer.person.{Person, PersonProperties}
 import com.github.javafaker.{Commerce, Company, Faker}
-import com.jvo.datagenerator.dto.entitydata.{DependentField, EntityMetadata}
+import com.jvo.datagenerator.config.{DependencyDataDelay, EmptyStringValues, NullValues, WrongFormatValues}
+import com.jvo.datagenerator.dto.entitydata.{DependentFieldProperties, EntityFields, EntityGenerationScenarioProperties, EntityMetadata}
 import com.jvo.datagenerator.dto.SpecificDataFieldProperties
 import com.jvo.datagenerator.services.keepers.DataKeeper
 import com.jvo.datagenerator.services.keepers.RolesKeeper._
@@ -51,7 +52,7 @@ object DataGeneratorUtils {
     }
   }
 
-  def mapToGenericRecord(entityMetadata: EntityMetadata): Record = {
+  def mapToGenericRecord(entityMetadata: EntityMetadata, entityGenerationScenarioProperties: EntityGenerationScenarioProperties): Record = {
 
     val entityBuilder = new GenericRecordBuilder(entityMetadata.schema)
 
@@ -63,7 +64,7 @@ object DataGeneratorUtils {
     record
   }
 
-  def mapToCompanyRecord(entityMetadata: EntityMetadata): Record = {
+  def mapToCompanyRecord(entityMetadata: EntityMetadata, entityGenerationScenarioProperties: EntityGenerationScenarioProperties): Record = {
 
     val entityBuilder = new GenericRecordBuilder(entityMetadata.schema)
 
@@ -75,7 +76,7 @@ object DataGeneratorUtils {
     record
   }
 
-  def mapToPersonRecord(entityMetadata: EntityMetadata): Record = {
+  def mapToPersonRecord(entityMetadata: EntityMetadata, entityGenerationScenarioProperties: EntityGenerationScenarioProperties): Record = {
 
     val entityBuilder = new GenericRecordBuilder(entityMetadata.schema)
 
@@ -87,7 +88,7 @@ object DataGeneratorUtils {
     record
   }
 
-  def mapToProductRecord(entityMetadata: EntityMetadata): Record = {
+  def mapToProductRecord(entityMetadata: EntityMetadata, entityGenerationScenarioProperties: EntityGenerationScenarioProperties): Record = {
 
     val entityBuilder = new GenericRecordBuilder(entityMetadata.schema)
 
@@ -99,12 +100,21 @@ object DataGeneratorUtils {
     record
   }
 
-  def mapToPurchaseRecord(entityMetadata: EntityMetadata): Record = {
+  def mapToPurchaseRecord(entityMetadata: EntityMetadata, entityGenerationScenarioProperties: EntityGenerationScenarioProperties): Record = {
+
     val entityBuilder = new GenericRecordBuilder(entityMetadata.schema)
 
     setGenericEntityFields(entityMetadata, entityBuilder)
     setPurchaseRecordSpecificFields(entityBuilder, entityMetadata.specificDataFields)
     setDependentFields(entityMetadata, entityBuilder)
+
+    entityGenerationScenarioProperties.dataGenerationScenario match {
+      case DependencyDataDelay => setDependentFieldsDelayedValues(entityMetadata, entityBuilder, entityGenerationScenarioProperties.entityFields)
+      case NullValues =>
+      case EmptyStringValues =>
+      case WrongFormatValues =>
+      case _ =>
+    }
 
     val record = entityBuilder.build()
     record
@@ -146,7 +156,22 @@ object DataGeneratorUtils {
 
   private def setDependentFields(entityMetadata: EntityMetadata, entityBuilder: GenericRecordBuilder): Unit = {
     entityMetadata.dependentFields.foreach {
-      dependentField: DependentField => setDependentFieldValue(entityBuilder, dependentField)
+      dependentField: DependentFieldProperties => setDependentFieldValue(entityBuilder, dependentField)
+    }
+  }
+
+  private def setDependentFieldsDelayedValues(entityMetadata: EntityMetadata, entityBuilder: GenericRecordBuilder,
+                                              entityFields: Option[EntityFields]): Unit = {
+
+    val fieldsToSet = entityFields.map(f => f.fields.toSet).getOrElse(Set())
+
+    if (fieldsToSet.isEmpty) {
+      entityMetadata.dependentFields
+        .foreach(dependentField => setDependentFieldDelayedValue(entityBuilder, dependentField))
+    } else {
+      entityMetadata.dependentFields
+        .filter(dependentFieldProperties => fieldsToSet.contains(dependentFieldProperties.field.name()))
+        .foreach(dependentField => setDependentFieldDelayedValue(entityBuilder, dependentField))
     }
   }
 
@@ -285,12 +310,22 @@ object DataGeneratorUtils {
     }
   }
 
-  def setDependentFieldValue(entityBuilder: GenericRecordBuilder, dependentFieldProps: DependentField): Unit = {
+  def setDependentFieldValue(entityBuilder: GenericRecordBuilder, dependentFieldProps: DependentFieldProperties): Unit = {
 
-    val keysAmount = DataKeeper.getSizeByKey(dependentFieldProps.dependencyEntity)
+    val keysAmount = DataKeeper.getGeneratedDataSizeByKey(dependentFieldProps.dependencyEntity)
     val keyIndex = FakerGenerator.number().numberBetween(0, keysAmount - 1)
 
     DataKeeper.getValueForKeyByIndex(dependentFieldProps.dependencyEntity, keyIndex)
+      .flatMap(dependencyRecord => Option(dependencyRecord.get(dependentFieldProps.dependencyField)))
+      .foreach(dependencyFieldValue => entityBuilder.set(dependentFieldProps.field.name(), dependencyFieldValue))
+  }
+
+  def setDependentFieldDelayedValue(entityBuilder: GenericRecordBuilder, dependentFieldProps: DependentFieldProperties): Unit = {
+
+    val keysAmount = DataKeeper.getDelayedDataSizeByKey(dependentFieldProps.dependencyEntity)
+    val keyIndex = FakerGenerator.number().numberBetween(0, keysAmount - 1)
+
+    DataKeeper.getDelayedValueForKeyByIndex(dependentFieldProps.dependencyEntity, keyIndex)
       .flatMap(dependencyRecord => Option(dependencyRecord.get(dependentFieldProps.dependencyField)))
       .foreach(dependencyFieldValue => entityBuilder.set(dependentFieldProps.field.name(), dependencyFieldValue))
   }

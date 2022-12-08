@@ -10,17 +10,19 @@ import com.jvo.datagenerator.utils.{DataGeneratorUtils, ScenarioUtils}
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericData.Record
 
-object DataGenerationService {
+import scala.Option
+
+object DataGenerationManager {
 
   implicit val orderingRatedEntityDependencies: Ordering[RatedEntityDependency] = Ordering.by[RatedEntityDependency, Int](_.ratio).reverse
   implicit val orderingByReferenceRatio: Ordering[ReferenceRatioEntities] = Ordering.by[ReferenceRatioEntities, Int](_.ratio)
 
-  def generateData(dataGenerationRequest: DataGenerationRequest): Either[Set[IllegalArgumentException], Seq[(String, Seq[GenericData.Record])]] = {
+  def generateData(dataGenerationRequest: DataGenerationRequest): Either[Set[IllegalArgumentException], Seq[(String, Map[DataGenerationScenario, Seq[Record]])]] = {
 
     val maybeRecords = getEntityMetadataGenerationProperties(dataGenerationRequest)
       .map { entityMetadataGenerationProperties: Set[EntityMetadataGenerationProperties] =>
 
-        val ratedDependencies: Seq[RatedEntityDependency] = getRatedEntityDependencies(entityMetadataGenerationProperties)
+        val ratedDependencies: Seq[RatedEntityDependency] = EntityDependencyBuilder.getRatedEntityDependencies(entityMetadataGenerationProperties)
         val referenceRatedDependencies: Seq[ReferenceRatioEntities] = getReferenceRatioDependenciesForEntity(ratedDependencies)
         implicit val entityGenerationPropertiesMap: Map[String, EntityGenerationProperties] = getEntityGenerationPropertiesMap(entityMetadataGenerationProperties)
 
@@ -67,19 +69,21 @@ object DataGenerationService {
 
   private def updateValuesForEntity(entityFields: EntityFields): Option[RecordsImportProperties] = {
 
-    DataKeeper.getGeneratedDataWithContext(entityFields.entityName)
-      .map { dataWithGenerationContext: EntityDataWithGenerationContext =>
-        val records = dataWithGenerationContext.generationData.values
-          .takeRight((dataWithGenerationContext.generationData.size * 0.1).toInt)
-          .map(record => DataGeneratorUtils.updateRecord(record, dataWithGenerationContext.entityMetadataGenerationProperties.entityMetadata))
-          .toSeq
+    //    DataKeeper.getGeneratedDataWithContext(entityFields.entityName)
+    //      .map { dataWithGenerationContext: EntityDataWithGenerationContext =>
+    //        val records = dataWithGenerationContext.generationData.values
+    //          .takeRight((dataWithGenerationContext.generationData. * 0.1).toInt)
+    //          .map(record => DataGeneratorUtils.updateRecord(record, dataWithGenerationContext.entityMetadataGenerationProperties.entityMetadata))
+    //          .toSeq
+    //
+    //        RecordsImportProperties(records, dataWithGenerationContext.entityMetadataGenerationProperties)
+    //      }
 
-        RecordsImportProperties(records, dataWithGenerationContext.entityMetadataGenerationProperties)
-      }
+    None
   }
 
   private def processEntityMetadataSequence(ratedDependencies: Seq[ReferenceRatioEntities])
-                                           (implicit entityGenerationPropertiesMap: Map[String, EntityGenerationProperties]): Seq[(String, Seq[GenericData.Record])] = {
+                                           (implicit entityGenerationPropertiesMap: Map[String, EntityGenerationProperties]): Seq[(String, Map[DataGenerationScenario, Seq[Record]])] = {
     ratedDependencies
       .flatMap { dependencyEntities: ReferenceRatioEntities =>
         dependencyEntities.ratedEntityDependencies
@@ -90,19 +94,19 @@ object DataGenerationService {
   }
 
   private def generateAndPushData(implicit entityGenerationPropertiesMap: Map[String, EntityGenerationProperties],
-                                  entityMetadata: EntityMetadata): Option[(String, Seq[GenericData.Record])] = {
+                                  entityMetadata: EntityMetadata): Option[(String, Map[DataGenerationScenario, Seq[Record]])] = {
 
     entityGenerationPropertiesMap.get(entityMetadata.name)
       .map { entityGenerationProperties: EntityGenerationProperties =>
-        val records: Seq[Record] = generateRecordsForEntityMetadata(entityMetadata, entityGenerationProperties.recordsLimit)
-        val entityMetadataGenerationProperties = EntityMetadataGenerationProperties(entityMetadata, entityGenerationProperties)
 
-        val recordsImportProperties: RecordsImportProperties = getRecordImportProperties(records, entityMetadataGenerationProperties)
+        val scenarioRecords: Map[DataGenerationScenario, Seq[Record]] = generateRecordsForEntityMetadata(entityMetadata, entityGenerationProperties)
+        val entityMetadataGenerationProperties = EntityMetadataGenerationProperties(entityMetadata, entityGenerationProperties)
+        val recordsImportProperties: RecordsImportProperties = getRecordImportProperties(scenarioRecords, entityMetadataGenerationProperties)
 
         persistGeneratedData(recordsImportProperties)
 
-        DataUploader.pushToAzureEventHub(recordsImportProperties)
-        (entityMetadata.name, records)
+        //DataUploader.pushToAzureEventHub(recordsImportProperties)
+        (entityMetadata.name, scenarioRecords)
       }
   }
 
@@ -119,18 +123,15 @@ object DataGenerationService {
     }
   }
 
-  private def getRecordImportProperties(records: Seq[Record],
+  private def getRecordImportProperties(scenarioRecords: Map[DataGenerationScenario, Seq[Record]],
                                         entityMetadataGenerationProperties: EntityMetadataGenerationProperties): RecordsImportProperties = {
 
-    val (recordsToSend, recordsDelayed) =
-      if (entityMetadataGenerationProperties.hasDataDelayScenario) {
-        val delayRecordsNumber: Int = getDelayedRecordsNumber(records)
-        (Some(records.dropRight(delayRecordsNumber)), Some(records.takeRight(delayRecordsNumber)))
-      } else {
-        (Some(records), None)
-      }
-
-    RecordsImportProperties(recordsToSend, recordsDelayed, entityMetadataGenerationProperties)
+    RecordsImportProperties(
+      recordsToSend = Option(scenarioRecords.removed(DependencyDataDelay)),
+      recordsToDelay = scenarioRecords.get(DependencyDataDelay).map(records => Map(DependencyDataDelay -> records)),
+      scenarioRecords = scenarioRecords,
+      entityMetadataGenerationProperties = entityMetadataGenerationProperties
+    )
   }
 
   private def getEntityGenerationPropertiesMap(implicit entityMetadataGenerationProperties: Set[EntityMetadataGenerationProperties]) = {
@@ -142,36 +143,39 @@ object DataGenerationService {
       .toMap
   }
 
-  private def getDelayedRecordsNumber(records: Seq[GenericData.Record]): Int = {
-    val recordsNumber = (records.size * 0.1).toInt
-
-    if (recordsNumber == 0) 1 else recordsNumber
-  }
-
-  private def getDataGenerationScenario(property: DataGenerationProperties)
+  private def getDataGenerationScenario(generationProperties: DataGenerationProperties, recordsLimit: Int)
                                        (implicit dataGenerationRequest: DataGenerationRequest): Seq[EntityGenerationScenarioProperties] = {
-    property.dataGenerationScenarios
-      .map(dataGenerationScenarios => dataGenerationScenarios.map(mapToEntityGenerationScenario))
-      .getOrElse(getEntityGenerationScenariosFromRoot(property, dataGenerationRequest))
+
+    generationProperties.dataGenerationScenarios
+      .map(dataGenerationScenarios => dataGenerationScenarios.map(scenario => mapToEntityGenerationScenario(scenario, recordsLimit)))
+      .getOrElse(getEntityGenerationScenariosFromRoot(generationProperties, dataGenerationRequest))
   }
 
-  private def getEntityGenerationScenariosFromRoot(property: DataGenerationProperties,
+  private def getEntityGenerationScenariosFromRoot(generationProperties: DataGenerationProperties,
                                                    dataGenerationRequest: DataGenerationRequest): Seq[EntityGenerationScenarioProperties] = {
 
-    val scenarios: Seq[EntityGenerationScenarioProperties] = dataGenerationRequest.dataGenerationScenarios
-      .filter(scenarioRequest => entityHasDataGenerationScenario(scenarioRequest, property))
-      .map(scenarioRequest => mapToEntityGenerationScenario(scenarioRequest))
+    val recordsLimit = generationProperties.recordsLimit.getOrElse(dataGenerationRequest.recordsLimit.getOrElse(10))
 
-    if (scenarios.isEmpty)
-      Seq(EntityGenerationScenarioProperties(dataGenerationScenario = Basic, entityFields = None))
-    else
-      scenarios
+    val scenarios: Seq[EntityGenerationScenarioProperties] = dataGenerationRequest.dataGenerationScenarios
+      .filter(scenarioRequest => entityHasDataGenerationScenario(scenarioRequest, generationProperties))
+      .map(scenarioRequest => mapToEntityGenerationScenario(scenarioRequest, recordsLimit))
+
+    if (scenarios.isEmpty) {
+      Seq(EntityGenerationScenarioProperties(dataGenerationScenario = Basic, recordsNumber = recordsLimit))
+    } else {
+      val basicRecordsNumber = recordsLimit - scenarios.map(_.recordsNumber).sum
+      if (basicRecordsNumber < 0)
+        scenarios
+      else
+        scenarios :+ EntityGenerationScenarioProperties(dataGenerationScenario = Basic, recordsNumber = basicRecordsNumber)
+    }
   }
 
-  private def mapToEntityGenerationScenario(scenarioRequest: DataGenerationScenarioRequest): EntityGenerationScenarioProperties = {
+  private def mapToEntityGenerationScenario(scenarioRequest: DataGenerationScenarioRequest, recordsLimit: Int): EntityGenerationScenarioProperties = {
     EntityGenerationScenarioProperties(
       dataGenerationScenario = ScenarioUtils.defineScenarioByName(scenarioRequest.scenarioName),
-      entityFields = scenarioRequest.entityFields)
+      entityFields = scenarioRequest.entityFields,
+      recordsNumber = scenarioRequest.recordsNumber.getOrElse(recordsLimit * 10 / 100))
   }
 
   private def entityHasDataGenerationScenario(scenarioRequest: DataGenerationScenarioRequest, property: DataGenerationProperties): Boolean = {
@@ -180,13 +184,18 @@ object DataGenerationService {
 
   private def mapToEntityGenerationProperty(generationProperties: DataGenerationProperties)
                                            (implicit dataGenerationRequest: DataGenerationRequest): EntityGenerationProperties = {
+
+    val dataGenerationScenario = getDataGenerationScenario(generationProperties,
+      generationProperties.recordsLimit.getOrElse(dataGenerationRequest.recordsLimit.getOrElse(10)))
+
+    println(dataGenerationScenario)
     EntityGenerationProperties(
       server = dataGenerationRequest.server,
       sinkType = generationProperties.sinkType.getOrElse(dataGenerationRequest.sinkType),
       sinkSchema = dataGenerationRequest.sinkSchema,
       dataFormat = generationProperties.dataFormat.getOrElse(dataGenerationRequest.dataFormat),
       mode = dataGenerationRequest.mode,
-      entityGenerationScenarioProperties = getDataGenerationScenario(generationProperties),
+      entityGenerationScenarioProperties = dataGenerationScenario,
       recordsLimit = generationProperties.recordsLimit.getOrElse(dataGenerationRequest.recordsLimit.getOrElse(10)),
       recordsRatePerSecond = dataGenerationRequest.recordsRatePerSecond,
       entityName = generationProperties.entityName,
@@ -197,12 +206,6 @@ object DataGenerationService {
     )
   }
 
-  private def getRatedEntityDependencies(entityMetadataGenerationProperties: Set[EntityMetadataGenerationProperties]) = {
-    entityMetadataGenerationProperties
-      .flatMap((emProps: EntityMetadataGenerationProperties) => getGenerationDependenciesForEntity(emProps.entityMetadata))
-      .toSeq
-      .sorted
-  }
 
   private def getEntityMetadataGenerationProperties(implicit dataGenerationRequest: DataGenerationRequest) = {
 
@@ -221,9 +224,20 @@ object DataGenerationService {
     }
   }
 
-  private def updateGenerationPropertiesIfContainsDelayScenario(properties: Set[EntityMetadataGenerationProperties]) = {
+  private def updateGenerationPropertiesIfContainsDelayScenario(properties: Set[EntityMetadataGenerationProperties]): Set[EntityMetadataGenerationProperties] = {
 
-    val propertiesWithDependencyDataDelayScenario: Set[String] = properties
+    val propertiesWithDependencyDataDelayScenario: Set[String] = getPropertiesWithDependencyDataDelayScenario(properties)
+
+    val propertiesWithDelayedScenarios = properties
+      .filter(generationProperties => propertiesWithDependencyDataDelayScenario.contains(generationProperties.entityMetadata.name))
+      .map(addDataDelayScenarioToGenerationProperties)
+
+    propertiesWithDelayedScenarios ++ properties
+      .filterNot(generationProperties => propertiesWithDependencyDataDelayScenario.contains(generationProperties.entityMetadata.name))
+  }
+
+  private def getPropertiesWithDependencyDataDelayScenario(properties: Set[EntityMetadataGenerationProperties]): Set[String] = {
+    properties
       .flatMap { (props: EntityMetadataGenerationProperties) =>
         props.entityGenerationProperties.entityGenerationScenarioProperties
           .find(_.dataGenerationScenario == DependencyDataDelay)
@@ -234,34 +248,64 @@ object DataGenerationService {
           .map(entityFields => Set(entityFields.entityName))
           .getOrElse(tuple._1.entityMetadata.dependentFields.map(_.dependencyEntity))
       }
-
-    properties
-      .filter(generationProperties => propertiesWithDependencyDataDelayScenario.contains(generationProperties.entityMetadata.name))
-      .map(addDataDelayScenarioToGenerationProperties) ++ properties
-      .filterNot(generationProperties => propertiesWithDependencyDataDelayScenario.contains(generationProperties.entityMetadata.name))
   }
 
   private def addDataDelayScenarioToGenerationProperties(metadataGenerationProperties: EntityMetadataGenerationProperties) = {
 
-    metadataGenerationProperties.copy(
-      entityGenerationProperties = metadataGenerationProperties.entityGenerationProperties.copy(
-        entityGenerationScenarioProperties = dropBasicAndAddDataDelayScenario(metadataGenerationProperties)))
+    metadataGenerationProperties.getEntityGenerationScenarioProperties
+      .find(_.dataGenerationScenario == DataDelay) match {
+      case Some(_) =>
+        metadataGenerationProperties
+      case None =>
+        metadataGenerationProperties.copy(
+          entityGenerationProperties = metadataGenerationProperties.entityGenerationProperties.copy(
+            entityGenerationScenarioProperties = addDataDelayScenario(metadataGenerationProperties)))
+    }
   }
 
-  private def dropBasicAndAddDataDelayScenario(metadataGenerationProperties: EntityMetadataGenerationProperties) = {
-    metadataGenerationProperties.entityGenerationProperties.entityGenerationScenarioProperties
-      .filterNot(_.dataGenerationScenario == Basic) :+ EntityGenerationScenarioProperties(DataDelay)
-  }
+  private def addDataDelayScenario(metadataGenerationProperties: EntityMetadataGenerationProperties): Seq[EntityGenerationScenarioProperties] = {
 
-  private def generateRecordsForEntityMetadata(entityMetadata: EntityMetadata, recordsNumber: Int) = {
+    val dataDelayRecordsNumber = metadataGenerationProperties.getRecordsSizeLimit * 10 / 100
+    val basicScenarioRecords = metadataGenerationProperties.getRecordsSizeLimit - dataDelayRecordsNumber
 
-    val mapToRecordFunction: EntityMetadata => GenericData.Record = RolesKeeper.getMapToRecordFunction(entityMetadata.role)
-
-    val records = (1 to recordsNumber)
-      .map { _ =>
-        mapToRecordFunction.apply(entityMetadata)
+    val updatedScenarios =
+      if (basicScenarioRecords <= 0) {
+        getNonBasicScenarios(metadataGenerationProperties)
+      } else {
+        metadataGenerationProperties.getEntityGenerationScenarioProperties
+          .find(_.dataGenerationScenario == Basic)
+          .map(basicScenario => getNonBasicScenarios(metadataGenerationProperties) :+
+            basicScenario.copy(recordsNumber = basicScenarioRecords))
+          .getOrElse(metadataGenerationProperties.getEntityGenerationScenarioProperties)
       }
-    records
+
+    val dataDelayScenario = EntityGenerationScenarioProperties(dataGenerationScenario = DataDelay, recordsNumber = dataDelayRecordsNumber)
+
+    updatedScenarios :+ dataDelayScenario
+  }
+
+  private def getNonBasicScenarios(metadataGenerationProperties: EntityMetadataGenerationProperties): Seq[EntityGenerationScenarioProperties] = {
+    metadataGenerationProperties.getEntityGenerationScenarioProperties
+      .filter(_.dataGenerationScenario != Basic)
+  }
+
+  private def generateRecordsForEntityMetadata(entityMetadata: EntityMetadata,
+                                               entityGenerationProperties: EntityGenerationProperties): Map[DataGenerationScenario, Seq[Record]] = {
+
+    val mapToRecordFunction: (EntityMetadata, EntityGenerationScenarioProperties) => GenericData.Record =
+      RolesKeeper.getMapToRecordFunction(entityMetadata.role)
+
+    val records =
+      for {
+        entityGenerationScenarioProperty <- entityGenerationProperties.entityGenerationScenarioProperties
+        _ <- 1 to entityGenerationScenarioProperty.recordsNumber
+      } yield {
+        (entityGenerationScenarioProperty.dataGenerationScenario,
+          mapToRecordFunction.apply(entityMetadata, entityGenerationScenarioProperty))
+      }
+
+    records.groupMap(_._1)(_._2)
+
   }
 
   private def getReferenceRatioDependenciesForEntity(entityWithDependencies: Seq[RatedEntityDependency]): Seq[ReferenceRatioEntities] = {
@@ -279,21 +323,6 @@ object DataGenerationService {
       .toSeq
 
     ratedDependencies.sorted
-  }
-
-  private def getGenerationDependenciesForEntity(entityMetadata: EntityMetadata): Set[RatedEntityDependency] = {
-    Set(RatedEntityDependency(entityMetadata, entityMetadata.dependentFields.size)) ++ entityMetadata.dependentFields.flatMap(getDependency)
-  }
-
-  private def getDependency(dependentField: DependentField): Set[RatedEntityDependency] = {
-    EntitiesKeeper.getEntity(dependentField.dependencyEntity) match {
-      case Right(entityMetadata: EntityMetadata) =>
-        if (entityMetadata.dependentFields.isEmpty)
-          Set(RatedEntityDependency(entityMetadata, 0))
-        else
-          getGenerationDependenciesForEntity(entityMetadata)
-      case Left(ex) => Set()
-    }
   }
 
 }

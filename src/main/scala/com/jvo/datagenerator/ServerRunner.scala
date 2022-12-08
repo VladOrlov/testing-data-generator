@@ -22,7 +22,7 @@ object ServerRunner {
       .add[SchemaController]
       .add[EntityMetadataController]
       .add[DataGenerationController]
-      .add[DataAccessController]
+      .add[EntityDataController]
       .add[RolesController]
 
     //Write any other initialization BEFORE Finagle server init

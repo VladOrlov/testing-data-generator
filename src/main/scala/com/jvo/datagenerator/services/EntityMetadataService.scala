@@ -13,7 +13,7 @@ import scala.util.Try
 
 object EntityMetadataService {
 
-  case class FieldDependencyMetadata(dependentField: DependentField, entityMetadata: EntityMetadata)
+  case class FieldDependencyMetadata(dependentField: DependentFieldProperties, entityMetadata: EntityMetadata)
 
   //TODO Investigate purpose of method
   def registerEntity(entityMetadata: EntityMetadata): Unit = {
@@ -67,7 +67,7 @@ object EntityMetadataService {
     dependencyFieldMetadata.dependentField.dependencyField
   }
 
-  private def getDependencyEntity(dependentField: DependentField) = {
+  private def getDependencyEntity(dependentField: DependentFieldProperties) = {
     EntitiesKeeper.getEntity(dependentField.dependencyEntity)
       .map(entityMetadata => FieldDependencyMetadata(dependentField, entityMetadata))
   }
@@ -99,7 +99,8 @@ object EntityMetadataService {
           role = registrationRequest.getRole().getOrElse(GenericRole),
           schema = schema,
           dependentFields = dependentFields,
-          specificDataFields = specificFields
+          specificDataFields = specificFields,
+          entityGenerationScenarioProperties = None
         ))
       } else {
         Left(new IllegalArgumentException((dependentFieldsErrors ++ specificFieldsErrors)
@@ -113,7 +114,7 @@ object EntityMetadataService {
       .map(_.map {
         case (fieldName, properties) => Try(schema.getField(fieldName))
           .toEither
-          .map(field => DependentField(field, properties.dependencyEntity, properties.dependencyField))
+          .map(field => DependentFieldProperties(field, properties.dependencyEntity, properties.dependencyField))
       })
       .toSet
       .flatten

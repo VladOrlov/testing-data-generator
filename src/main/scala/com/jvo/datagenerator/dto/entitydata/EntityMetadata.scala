@@ -8,5 +8,6 @@ case class EntityMetadata(name: String,
                           role: String = GenericRole,
                           schema: Schema,
                           idFieldName: String = "id",
-                          dependentFields: Set[DependentField],
-                          specificDataFields: Set[SpecificDataFieldProperties])
+                          dependentFields: Set[DependentFieldProperties],
+                          specificDataFields: Set[SpecificDataFieldProperties],
+                          entityGenerationScenarioProperties: Option[EntityGenerationScenarioProperties])

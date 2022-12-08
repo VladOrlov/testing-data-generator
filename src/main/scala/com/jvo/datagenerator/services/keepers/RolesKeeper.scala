@@ -1,6 +1,6 @@
 package com.jvo.datagenerator.services.keepers
 
-import com.jvo.datagenerator.dto.entitydata.EntityMetadata
+import com.jvo.datagenerator.dto.entitydata.{EntityGenerationScenarioProperties, EntityMetadata}
 import com.jvo.datagenerator.utils.DataGeneratorUtils
 import org.apache.avro.generic.GenericData
 
@@ -38,7 +38,7 @@ object RolesKeeper {
   val CompanyEmailRole = "COMPANY_EMAIL"
   val CompanyAddressRole = "COMPANY_ADDRESS"
 
-  private[this] val entityRolesMapping: Map[String, EntityMetadata => GenericData.Record] =
+  private[this] val entityRolesMapping: Map[String, (EntityMetadata, EntityGenerationScenarioProperties) => GenericData.Record] =
     Map(
       PersonRole -> DataGeneratorUtils.mapToPersonRecord,
       CompanyRole -> DataGeneratorUtils.mapToCompanyRecord,
@@ -54,11 +54,11 @@ object RolesKeeper {
     ProductRole -> Set(ProductNameRole, ProductPriceRole),
     PurchaseRole -> Set(PurchaseQuantityRole, PurchaseSumRole, PurchasePriceRole))
 
-  def getMapToRecordFunction(role: String): EntityMetadata => GenericData.Record = {
+  def getMapToRecordFunction(role: String): (EntityMetadata, EntityGenerationScenarioProperties) => GenericData.Record = {
     entityRolesMapping.getOrElse(role, DataGeneratorUtils.mapToGenericRecord)
   }
 
-  def getMapToRecordFunction(maybeRole: Option[String]): EntityMetadata => GenericData.Record = {
+  def getMapToRecordFunction(maybeRole: Option[String]): (EntityMetadata, EntityGenerationScenarioProperties) => GenericData.Record = {
     maybeRole
       .flatMap(role => entityRolesMapping.get(role))
       .getOrElse(DataGeneratorUtils.mapToGenericRecord)

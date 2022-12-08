@@ -1,11 +1,12 @@
 package com.jvo.datagenerator.dto
 
-import com.jvo.datagenerator.config.PersistenceMode
+import com.jvo.datagenerator.config.{DataGenerationScenario, PersistenceMode}
 import com.jvo.datagenerator.dto.entitydata.{EntityGenerationProperties, EntityMetadata, EntityMetadataGenerationProperties}
-import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericData.Record
 
-case class RecordsImportProperties(recordsToSend: Option[Seq[GenericData.Record]],
-                                   recordsToDelay: Option[Seq[GenericData.Record]] = None,
+case class RecordsImportProperties(recordsToSend: Option[Map[DataGenerationScenario, Seq[Record]]],
+                                   recordsToDelay: Option[Map[DataGenerationScenario, Seq[Record]]] = None,
+                                   scenarioRecords: Map[DataGenerationScenario, Seq[Record]],
                                    entityMetadataGenerationProperties: EntityMetadataGenerationProperties)
 
 
@@ -30,10 +31,4 @@ object RecordsImportProperties {
     }
   }
 
-  def apply(recordsToSend: Seq[GenericData.Record], entityMetadataGenerationProperties: EntityMetadataGenerationProperties): RecordsImportProperties = {
-    RecordsImportProperties(
-      recordsToSend = Option(recordsToSend),
-      entityMetadataGenerationProperties = entityMetadataGenerationProperties
-    )
-  }
 }

@@ -1,9 +1,10 @@
 package com.jvo.datagenerator.api
 
+import com.jvo.datagenerator.config.DataGenerationScenario
 import com.jvo.datagenerator.dto.RecordsImportProperties
 import com.jvo.datagenerator.dto.api.DataGenerationRequest
 import com.jvo.datagenerator.dto.entitydata.EntityFields
-import com.jvo.datagenerator.services.DataGenerationService
+import com.jvo.datagenerator.services.DataGenerationManager
 import com.jvo.datagenerator.services.keepers.DataKeeper
 import com.jvo.datagenerator.utils.AvroUtils
 import org.apache.avro.generic.GenericData
@@ -17,7 +18,7 @@ trait DataGenerationController {
   @Endpoint(method = HttpMethod.POST, path = "/generated-data")
   def generateData(dataGenerationRequest: DataGenerationRequest): Response = {
 
-    DataGenerationService.generateData(dataGenerationRequest) match {
+    DataGenerationManager.generateData(dataGenerationRequest) match {
       case Right(generatedRecord: Seq[(String, IndexedSeq[GenericData.Record])]) =>
         Response(
           status = HttpStatus.Ok_200,
@@ -34,29 +35,14 @@ trait DataGenerationController {
   @Endpoint(method = HttpMethod.PUT, path = "/generated-data")
   def updateData(entitiesToUpdate: List[EntityFields]): Response = {
 
-    DataGenerationService.updateGeneratedData(entitiesToUpdate)
+    DataGenerationManager.updateGeneratedData(entitiesToUpdate)
 
     Response(status = HttpStatus.Ok_200, message = StringMessage("Updated"))
   }
 
-  @Endpoint(method = HttpMethod.GET, path = "/generated-data/delayed")
-  def getDelayedData: Seq[(String, Seq[Seq[(String, Any)]])] = {
-    val delayedDataMap: Map[String, RecordsImportProperties] = DataKeeper.getAllDelayedDataMap
-
-
-    val delayedData: Seq[(String, Seq[Seq[(String, Any)]])] = delayedDataMap
-      .flatMap { case (entity, recordsImportProperties) =>
-      recordsImportProperties.recordsToDelay
-        .map{records =>
-          (entity, records.map(record => AvroUtils.convertRecordToMap(record).toSeq))
-        }
-    }.toSeq
-
-    delayedData
-  }
-
   @Endpoint(method = HttpMethod.POST, path = "/generated-data/delayed")
   def pushDelayedData: Seq[(String, Int)] = {
-    DataGenerationService.pushDelayedData().toSeq
+    DataGenerationManager.pushDelayedData().toSeq
   }
+
 }

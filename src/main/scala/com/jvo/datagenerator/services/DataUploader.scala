@@ -25,9 +25,12 @@ object DataUploader {
     val producerClient: EventHubProducerClient = getEventHubProducer(entityGenerationProperties)
 
     logStatistic(recordsImportProperties)
+
     recordsImportProperties.recordsToSend
-      .map((records: Seq[Record]) => convertToTextFormatEventData(records))
-      .foreach((events: Seq[EventData]) => sendInBatch(producerClient, events))
+      .foreach(_.values
+        .map((records: Seq[Record]) => convertToTextFormatEventData(records))
+        .foreach((events: Seq[EventData]) => sendInBatch(producerClient, events))
+      )
 
     println(s"Records for Entity: ${recordsImportProperties.getEntityMetadata.name} pushed successfully!")
 
@@ -108,7 +111,6 @@ object DataUploader {
       .connectionString(entityGenerationProperties.getConnectionString, entityGenerationProperties.eventHubName)
       .buildProducerClient()
   }
-
 
   private def sendInBatch(producerClient: EventHubProducerClient, events: Seq[EventData]): Unit = {
     val options: CreateBatchOptions = new CreateBatchOptions() //.setPartitionId("bla")

@@ -11,7 +11,7 @@ object EntityMetadataGenerationProperties {
   implicit class EnrichedEntityMetadataGenerationProperties(entityMetadataGenerationProperties: EntityMetadataGenerationProperties) {
 
     def getEntitiesByScenario(scenario: DataGenerationScenario): Seq[String] = {
-      getEntityGenerationScenarioProperties(entityMetadataGenerationProperties)
+      getEntityGenerationScenarioProperties
         .filter(_.dataGenerationScenario == scenario)
         .flatMap((props: EntityGenerationScenarioProperties) => props.entityFields.map(_.entityName))
     }
@@ -19,11 +19,16 @@ object EntityMetadataGenerationProperties {
     def hasDataDelayScenario: Boolean = {
       entityMetadataGenerationProperties.entityGenerationProperties.hasDataDelayScenario
     }
+
+    def getRecordsSizeLimit: Int = {
+      entityMetadataGenerationProperties.entityGenerationProperties.recordsLimit
+    }
+
+    def getEntityGenerationScenarioProperties: Seq[EntityGenerationScenarioProperties] = {
+      entityMetadataGenerationProperties
+        .entityGenerationProperties
+        .entityGenerationScenarioProperties
+    }
   }
 
-  private def getEntityGenerationScenarioProperties(entityMetadataGenerationProperties: EntityMetadataGenerationProperties) = {
-    entityMetadataGenerationProperties
-      .entityGenerationProperties
-      .entityGenerationScenarioProperties
-  }
 }
